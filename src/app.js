@@ -40,6 +40,16 @@ app.post('/participants', async (req, res) => {
 
     await db.collection('participants').insertOne(user);
 
+    const updateStatus = {
+      to: 'Todos',
+      from: user.name,
+      text: 'entra na sala...',
+      type: 'status',
+      time: dayjs().format('HH:mm:ss'),
+    }
+
+    await db.collection('messages').insertOne(updateStatus);
+
     res.sendStatus(201);
   } catch (err) {
     res.sendStatus(500);
@@ -77,14 +87,39 @@ app.post('/messages', async (req, res) => {
     }
 
     message.time = dayjs().format('HH:mm:ss');
+    message.from = user;
 
-    await db.collection('message').insertOne(message);    
+    await db.collection('messages').insertOne(message);    
 
     res.sendStatus(201);
 
   } catch (err) {
     res.sendStatus(500);
   }
-})
+});
+
+app.get('/messages', async (req, res) => {
+  try {
+    let limit = parseInt(req.query.limit);  
+
+    const messages = await db.collection('messages').find().sort({$natural:-1}).limit(limit).toArray();
+
+    const user = req.headers.user;
+
+    if (!user) return res.sendStatus(401);
+
+    const verifyUser = await db.collection('participants').findOne({ name: user });
+
+    if (!verifyUser) {
+      return res.sendStatus(401);
+    }
+
+    const filteredMessages = messages.filter(message => (message.type === 'message' || message.to === user || message.from === user || message.to === 'Todos'));
+
+    res.send(filteredMessages)
+  } catch (err) {
+    res.sendStatus(500);
+  }
+});
 
 app.listen(5000);
