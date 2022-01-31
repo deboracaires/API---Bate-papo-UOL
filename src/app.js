@@ -3,6 +3,7 @@ import cors from 'cors';
 import { MongoClient, ObjectId } from 'mongodb';
 import dotenv from 'dotenv';
 import dayjs from 'dayjs';
+import { stripHtml } from "string-strip-html";
 
 import participantSchemma from './Schemmas/participantSchemma.js';
 import messageSchemma from './Schemmas/messageSchemma.js';
@@ -30,7 +31,7 @@ app.post('/participants', async (req, res) => {
       return res.sendStatus(422);
     }
 
-    const verifyUser = await db.collection('participants').findOne({ name: user.name.trim() });
+    const verifyUser = await db.collection('participants').findOne({ name: stripHtml(user.name).result.trim() });
 
     if (verifyUser) {
       return res.sendStatus(409);
@@ -42,7 +43,7 @@ app.post('/participants', async (req, res) => {
 
     const updateStatus = {
       to: 'Todos',
-      from: user.name,
+      from: stripHtml(user.name).result.trim(),
       text: 'entra na sala...',
       type: 'status',
       time: dayjs().format('HH:mm:ss'),
@@ -85,9 +86,10 @@ app.post('/messages', async (req, res) => {
     if (validation.error || (message.type !== 'private_message' && message.type !== 'message')) {
       return res.sendStatus(422);
     }
-
+    message.to = stripHtml(message.to).result.trim();
     message.time = dayjs().format('HH:mm:ss');
-    message.from = user;
+    message.from = stripHtml(user).result.trim();
+    message.text = stripHtml(message.text).result.trim();
 
     await db.collection('messages').insertOne(message);    
 
@@ -115,7 +117,7 @@ app.get('/messages', async (req, res) => {
     }
 
     const filteredMessages = messages.filter(message => (message.type === 'message' || message.to === user || message.from === user || message.to === 'Todos'));
-
+    console.log(filteredMessages)
     res.send(filteredMessages.reverse())
   } catch (err) {
     res.sendStatus(500);
@@ -168,5 +170,83 @@ async function removeInactiveUsers () {
 }
 
 setInterval(removeInactiveUsers, 15000);
+
+app.delete('/messages/:id', async (req, res) => {
+  try {
+    const user = req.headers.user;
+
+    if (!user) return res.sendStatus(401);
+
+    const verifyUser = await db.collection('participants').findOne({ name: user });
+
+    if (!verifyUser) {
+      return res.sendStatus(404);
+    }
+
+    const _id = req.params.id;
+
+    const message = await db.collection('messages').findOne({ _id: new ObjectId(_id) });
+
+    if (!message) {
+      return res.sendStatus(404);
+    }
+
+    if (message.from !== user) {
+      return res.sendStatus(401);
+    }
+
+    await db.collection('messages').deleteOne({ _id: new ObjectId(_id) });
+
+    res.sendStatus(200);
+
+  } catch (err) {
+    res.sendStatus(500);
+  }
+});
+
+app.put('/messages/:id', async (req, res) => {
+  try {
+    const message = req.body;
+
+    if (!message) {
+      res.sendStatus(400);
+    }
+
+    const user = req.headers.user;
+
+    if (!user) {
+      res.sendStatus(401);
+    }
+
+    const validation = messageSchemma.validate(message);
+
+    if (validation.error || (message.type !== 'private_message' && message.type !== 'message')) {
+      res.sendStatus(422);
+    }
+
+    message.to = stripHtml(message.to).result.trim();
+    message.time = dayjs().format('HH:mm:ss');
+    message.from = stripHtml(user).result.trim();
+    message.text = stripHtml(message.text).result.trim();
+
+    const _id = req.params.id;
+
+    const verifyMessage = await db.collection('messages').findOne({_id: new ObjectId(_id) });
+    
+    if (!verifyMessage) {
+      res.sendStatus(404);
+    }
+
+    if (verifyMessage.from !== user) {
+      res.sendStatus(401);
+    }
+
+    await db.collection('messages').updateOne({_id: new ObjectId(_id)}, { $set: message});
+
+    res.sendStatus(200);
+  } catch (err) {
+    res.sendStatus(500);
+  }
+});
 
 app.listen(5000);
