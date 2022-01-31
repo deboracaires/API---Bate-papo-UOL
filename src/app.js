@@ -122,4 +122,26 @@ app.get('/messages', async (req, res) => {
   }
 });
 
+app.post('/status', async (req, res) => {
+  try {
+    const user = req.headers.user;
+
+    if (!user) return res.sendStatus(401);
+
+    const verifyUser = await db.collection('participants').findOne({ name: user });
+
+    if (!verifyUser) {
+      return res.sendStatus(404);
+    }
+
+    await db.collection('participants').updateOne({ 
+			_id: verifyUser._id 
+		}, { $set: {"lastStatus": Date.now()} });
+    
+    res.sendStatus(200);
+  } catch (err) {
+    res.sendStatus(500);
+  }
+});
+
 app.listen(5000);
