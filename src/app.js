@@ -171,4 +171,37 @@ async function removeInactiveUsers () {
 
 setInterval(removeInactiveUsers, 15000);
 
+app.delete('/messages/:id', async (req, res) => {
+  try {
+    const user = req.headers.user;
+
+    if (!user) return res.sendStatus(401);
+
+    const verifyUser = await db.collection('participants').findOne({ name: user });
+
+    if (!verifyUser) {
+      return res.sendStatus(404);
+    }
+
+    const _id = req.params.id;
+
+    const message = await db.collection('messages').findOne({ _id: new ObjectId(_id) });
+
+    if (!message) {
+      return res.sendStatus(404);
+    }
+
+    if (message.from !== user) {
+      return res.sendStatus(401);
+    }
+
+    await db.collection('messages').deleteOne({ _id: new ObjectId(_id) });
+
+    res.sendStatus(200);
+
+  } catch (err) {
+    res.sendStatus(500);
+  }
+})
+
 app.listen(5000);
