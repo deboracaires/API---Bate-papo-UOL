@@ -3,6 +3,7 @@ import cors from 'cors';
 import { MongoClient, ObjectId } from 'mongodb';
 import dotenv from 'dotenv';
 import dayjs from 'dayjs';
+import { stripHtml } from "string-strip-html";
 
 import participantSchemma from './Schemmas/participantSchemma.js';
 import messageSchemma from './Schemmas/messageSchemma.js';
@@ -30,7 +31,7 @@ app.post('/participants', async (req, res) => {
       return res.sendStatus(422);
     }
 
-    const verifyUser = await db.collection('participants').findOne({ name: user.name.trim() });
+    const verifyUser = await db.collection('participants').findOne({ name: stripHtml(user.name).result.trim() });
 
     if (verifyUser) {
       return res.sendStatus(409);
@@ -42,7 +43,7 @@ app.post('/participants', async (req, res) => {
 
     const updateStatus = {
       to: 'Todos',
-      from: user.name,
+      from: stripHtml(user.name).result.trim(),
       text: 'entra na sala...',
       type: 'status',
       time: dayjs().format('HH:mm:ss'),
@@ -85,9 +86,10 @@ app.post('/messages', async (req, res) => {
     if (validation.error || (message.type !== 'private_message' && message.type !== 'message')) {
       return res.sendStatus(422);
     }
-
+    message.to = stripHtml(message.to).result.trim();
     message.time = dayjs().format('HH:mm:ss');
-    message.from = user;
+    message.from = stripHtml(user).result.trim();
+    message.text = stripHtml(message.text).result.trim();
 
     await db.collection('messages').insertOne(message);    
 
@@ -115,7 +117,7 @@ app.get('/messages', async (req, res) => {
     }
 
     const filteredMessages = messages.filter(message => (message.type === 'message' || message.to === user || message.from === user || message.to === 'Todos'));
-
+    console.log(filteredMessages)
     res.send(filteredMessages.reverse())
   } catch (err) {
     res.sendStatus(500);
