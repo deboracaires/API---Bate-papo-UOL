@@ -202,6 +202,51 @@ app.delete('/messages/:id', async (req, res) => {
   } catch (err) {
     res.sendStatus(500);
   }
-})
+});
+
+app.put('/messages/:id', async (req, res) => {
+  try {
+    const message = req.body;
+
+    if (!message) {
+      res.sendStatus(400);
+    }
+
+    const user = req.headers.user;
+
+    if (!user) {
+      res.sendStatus(401);
+    }
+
+    const validation = messageSchemma.validate(message);
+
+    if (validation.error || (message.type !== 'private_message' && message.type !== 'message')) {
+      res.sendStatus(422);
+    }
+
+    message.to = stripHtml(message.to).result.trim();
+    message.time = dayjs().format('HH:mm:ss');
+    message.from = stripHtml(user).result.trim();
+    message.text = stripHtml(message.text).result.trim();
+
+    const _id = req.params.id;
+
+    const verifyMessage = await db.collection('messages').findOne({_id: new ObjectId(_id) });
+    
+    if (!verifyMessage) {
+      res.sendStatus(404);
+    }
+
+    if (verifyMessage.from !== user) {
+      res.sendStatus(401);
+    }
+
+    await db.collection('messages').updateOne({_id: new ObjectId(_id)}, { $set: message});
+
+    res.sendStatus(200);
+  } catch (err) {
+    res.sendStatus(500);
+  }
+});
 
 app.listen(5000);
